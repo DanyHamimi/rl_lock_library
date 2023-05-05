@@ -5,24 +5,64 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <pthread.h>
 
-#define MAX_LOCKS 1024 // Vous pouvez ajuster cette valeur selon vos besoins
 
-// Structure pour stocker les informations sur les verrous personnalisés
+#define NB_OWNERS 10
+#define NB_FILES 256
+#define NB_LOCKS 256
+#define MAX_LOCKS 256
+
+
+typedef struct{
+    pid_t proc;
+    int des;
+} owner;
+
 typedef struct {
-    pid_t pid;              // PID du processus
-    off_t start;            // Position de début du verrou
-    off_t end;              // Position de fin du verrou
-    int type;               // Type de verrou (F_RDLCK ou F_WRLCK)
-} CustomFileLock;
+    int next_lock;
+    off_t starting_offset;
+    off_t len;
+    short type; // F_RDLCK ou F_WRLCK
+    size_t nb_owners;
+    owner lock_owners[NB_OWNERS];
+    pthread_mutex_t lock_mutex; 
+    pthread_cond_t lock_condition; 
+} rl_lock;
 
-// Prototypes de fonctions pour gérer les verrous dans la mémoire partagée
-int add_lock(CustomFileLock* shared_locks, CustomFileLock new_lock);
-int remove_lock(CustomFileLock* shared_locks, CustomFileLock lock_to_remove);
-int check_lock(CustomFileLock* shared_locks, CustomFileLock lock_to_check);
+typedef struct {
+    int first;
+    rl_lock lock_table[NB_LOCKS];
+    pthread_mutex_t file_mutex; 
+} rl_open_file;
 
-// Prototypes de fonctions pour verrouiller et déverrouiller un fichier en utilisant les verrous personnalisés
-int custom_lock(int fd, int lock_type, off_t start, off_t len);
-int custom_unlock(int fd, off_t start, off_t len);
+typedef struct{
+    int d;
+    rl_open_file *f;
+} rl_descriptor;
+
+
+//struct flock{
+    //short rl_type; /* F_RDLCK F_WRLCK F_UNLCK */
+    //short rl_whence; /* SEEK_SET SEEK_CUR SEEK_END */
+    //off_t rl_start; /*offset où le verrou commence*/
+    //off_t len; /* la longueur de segment*/
+   // pid_t pid; /* non utilisé dans le projet */
+ //};
+
+rl_descriptor rl_open(const char *pathname, int oflag, ...);
+
+int rl_close(rl_descriptor fd);
+
+int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck);
+
+//int rl_fcntl(rl_descriptor lfd, int cmd, struct rl_flock *lck);
+
+rl_descriptor rl_dup(rl_descriptor lfd);
+rl_descriptor rl_dup2(rl_descriptor lfd, int newd);
+
+pid_t rl_fork();
+
+int rl_init_library();
 
 #endif // RL_LOCK_LIBRARY_H
