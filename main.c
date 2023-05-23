@@ -9,7 +9,7 @@ int main() {
     rl_init_library();
 
     // Ouverture d'un fichier avec rl_open
-    rl_descriptor descriptor = rl_open("dan.txt", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    rl_descriptor descriptor = rl_open("dadada.txt", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if (descriptor.d == -1) {
         perror("Erreur lors de l'ouverture du fichier");
         return 1;
@@ -29,7 +29,7 @@ int main() {
         return 1;
     }
 
-    lock.l_start = 5;
+    lock.l_start = 50;
     lock.l_len = 10 ;
     lock.l_type = F_RDLCK;
     if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
@@ -74,7 +74,7 @@ int main() {
         return 1;
     }*/
 
-    //sleep(600);
+    sleep(600);
 
     /*lock.l_start = 0;
     lock.l_len = 5;

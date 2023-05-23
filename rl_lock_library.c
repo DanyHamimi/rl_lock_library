@@ -403,8 +403,10 @@ int removeOwnerFromLock(rl_lock *lock, owner lfd_owner,rl_descriptor* lfd, int i
 
 int addNewLock(rl_descriptor* lfd, struct flock *lck, owner lfd_owner){
     //parcourir les verrous du fichier via next_lock et ajouter le verrou à la fin
+
     int index = lfd->f->first;
     int old_index = index;
+    
     while(index != -1){
         old_index = index;
         index = lfd->f->lock_table[index].next_lock;
@@ -727,7 +729,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                         }
                                         else {
                                             removeOwnerFromLock(lock, lfd_owner, &lfd, i);
-                                            rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lck_end, .len = lock_end - lck_end, .next_lock = -1};
+                                            rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lck->l_start, .len = lock_end - lck_end, .next_lock = -1};
+                                            printf("lock posé de %ld à %ld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
                                             for (int j = 0; j < NB_LOCKS; j++) {
                                                 rl_lock *lock2 = &(lfd.f->lock_table[j]);
                                                 if (lock2->next_lock == -2) {
@@ -737,20 +740,22 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                                     pthread_mutex_init(&(lfd.f->lock_table[j].lock_mutex), NULL);
                                                     pthread_cond_init(&(lfd.f->lock_table[j].lock_condition), NULL);
                                                     lock->next_lock = j;
+                                                    break;
                                                 }
                                             }
                                         }
                                     }
                                     else {
-                                        printf("ici ?");
                                         if (lock->type == lck->l_type) {
                                             lock->starting_offset = lck->l_start;
                                             lock->len = lock_end - lck->l_start;
+                                            printf("Le verrou couvre de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
                                             printf("Le verrou a été posé\n");
                                             return 0;
                                         }
                                         else {
                                             rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lck->l_start, .len = lck_end - lck->l_start, .next_lock = -1};
+                                            printf("lock posé de %ld à %ld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
                                             lock->starting_offset = lck_end;
                                             lock->len = lock_end - lck_end;
                                             for (int j = 0; j < NB_LOCKS; j++) {
@@ -768,8 +773,66 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                         }
                                     }
                                 }
-                                else {
-                                    // No overlapping, continue checking other locks
+                                else if(lock->starting_offset <= lck->l_start && lock_end <= lck_end){
+                                    printf("hello");
+                                    if(lock->nb_owners > 1){
+                                        //je peux passer d'écriture à lecture mais pas l'inverse 
+                                        if(lock->type == F_RDLCK && lck->l_type == F_WRLCK){
+                                            printf("Impossible de poser le verou");
+                                            return -1;
+                                        }
+                                        else{
+                                            //enlever l'ownership du verrou existant et créer un nouveau verrou avec le reste du verrou existant et l'ajouter à la fin
+                                            removeOwnerFromLock(lock, lfd_owner, &lfd, i);
+                                            //Create a new lock with the beginning of the existing lock and the end of the new lock
+                                            rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lock->starting_offset, .len = lck->l_start - lock->starting_offset, .next_lock = -1};
+                                            printf("Nouveau verou de %ld à %ld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
+                                            //on ajoute le nouveau verrou à la fin
+                                            for(int j = 0; j < NB_LOCKS; j++){
+                                                rl_lock *lock2 = &(lfd.f->lock_table[j]);
+                                                if(lock2->next_lock == -2){
+                                                    lfd.f->lock_table[j] = new_lock;
+                                                    lfd.f->lock_table[j].lock_owners[0] = lfd_owner;
+                                                    lfd.f->lock_table[j].nb_owners = 1;
+                                                    pthread_mutex_init(&(lfd.f->lock_table[j].lock_mutex), NULL);
+                                                    pthread_cond_init(&(lfd.f->lock_table[j].lock_condition), NULL);
+                                                    lock->next_lock = j;
+                                                    break;
+                                                }
+                                            }
+                                        }
+
+                                        }
+                                    else{
+                                        //change the lock to a lock between l_start and lck_end if they are same type of lock
+                                        if(lock->type == lck->l_type){
+                                            lock->starting_offset = lock->starting_offset;
+                                            lock->len = lck_end - lock->starting_offset;
+                                            printf("Le verrou a été posé\n");
+                                            printf("le verrou couvre de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
+                                            return 0;
+                                        }
+                                        else{
+                                            int a = lck->l_start - lock->starting_offset;
+                                            printf("%d",a);
+                                            //si ce n'est pas le meme type on crée un verrou de lck_start à lck_end avec le type de lck et on modifie le verrou lock pour qu'il termine a lck_start
+                                            rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lck->l_start, .len = lck->l_len, .next_lock = -1};
+                                            printf("Nouveau verou de %ld à %ld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
+                                            lock->len = lck->l_start - lock->starting_offset;
+                                            //on ajoute le nouveau verrou à la fin
+                                            for(int j = 0; j < NB_LOCKS; j++){
+                                                rl_lock *lock2 = &(lfd.f->lock_table[j]);
+                                                if(lock2->next_lock == -2){
+                                                    lfd.f->lock_table[j] = new_lock;
+                                                    lfd.f->lock_table[j].lock_owners[0] = lfd_owner;
+                                                    lfd.f->lock_table[j].nb_owners = 1;
+                                                    pthread_mutex_init(&(lfd.f->lock_table[j].lock_mutex), NULL);
+                                                    pthread_cond_init(&(lfd.f->lock_table[j].lock_condition), NULL);
+                                                    lock->next_lock = j;
+                                                    break;
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -777,6 +840,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                 }
             }
         }
+    }
     }
 
     return 0;
