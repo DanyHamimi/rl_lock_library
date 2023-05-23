@@ -94,7 +94,7 @@ rl_descriptor rl_open(const char *pathname, int oflag, ...) {
             descriptor.f = NULL;
             return descriptor;
         }
-        descriptor.f = mmap(NULL, sizeof(rl_open_file), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        descriptor.f = (rl_open_file*)mmap(NULL, sizeof(rl_open_file), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
         for(int i = 0; i < NB_LOCKS; i++){
             descriptor.f->lock_table[i].next_lock = -2;
         }
@@ -126,7 +126,7 @@ rl_descriptor rl_open(const char *pathname, int oflag, ...) {
                 descriptor.f = NULL;
                 return descriptor;
             }
-            descriptor.f = mmap(NULL, sizeof(rl_open_file), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+            descriptor.f = (rl_open_file*)mmap(NULL, sizeof(rl_open_file), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 
             strncpy(descriptor.f->pathname, pathname, PATH_MAX - 1);
             descriptor.f->pathname[PATH_MAX - 1] = '\0';
@@ -246,13 +246,13 @@ static int addOwnerToLock(int w, owner lfd_owner, rl_open_file* lfd){
     rl_lock *lock = &(lfd->lock_table[w]);
     printf("nb owners %ld\n", lock->nb_owners);
     for(int i = 0; i < NB_OWNERS; i++){
-        printf("proc %d des %d\n", lock->lock_owners[i].proc, lock->lock_owners[i].des);
+    printf("proc %d des %d\n", (int)lock->lock_owners[i].proc, (int)lock->lock_owners[i].des);
         if(lock->lock_owners[i].proc == 0 && lock->lock_owners[i].des == 0){
             lock->lock_owners[i] = lfd_owner;
             lock->nb_owners++;
             printf("Le propriétaire a été ajouté\n");
             for(int j = 0; j < lock->nb_owners; j++){
-                printf("proc %d des %d\n", lock->lock_owners[j].proc, lock->lock_owners[j].des);
+                printf("proc %d des %d\n", (int)lock->lock_owners[j].proc, (int)lock->lock_owners[j].des);
             }
             return 0;
             printf("nb owners %ld\n", lock->nb_owners);
@@ -353,9 +353,9 @@ static void remove_dead_owners(rl_lock *lock, rl_descriptor *lfd, int i) {
     for (size_t j = 0; j < lock->nb_owners; j++) {
         owner ow = lock->lock_owners[j];
         if (!is_process_alive(ow.proc)) {
-            printf("On va supprimer proc %d des %d\n", lock->lock_owners[j].proc, lock->lock_owners[j].des);
-                lock->lock_owners[j].proc = 0;
-                lock->lock_owners[j].des = 0;
+            printf("On va supprimer proc %d des %d\n", (int)lock->lock_owners[j].proc, (int)lock->lock_owners[j].des);
+            lock->lock_owners[j].proc = 0;
+            lock->lock_owners[j].des = 0;
             lock->nb_owners--;
             printf("Processus mort supprimé\n");
             if (lock->nb_owners == 0) {
@@ -614,7 +614,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                 count++;
                 printf("verrou %d\n", i);
                 for (int j = 0; j < lock->nb_owners; j++) {
-                    printf("proc %d des %d\n", lock->lock_owners[j].proc, lock->lock_owners[j].des);
+                    printf("proc %d des %d\n", (int)lock->lock_owners[j].proc, (int)lock->lock_owners[j].des);
                     //print intervalle du verou
                     printf("de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
                 }
