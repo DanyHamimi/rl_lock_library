@@ -646,21 +646,19 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
     owner lfd_owner = {.proc = getpid(), .des = lfd.d};
     
     if (cmd == F_SETLK) {
-            for (int i = 0; i < NB_LOCKS; i++) {
-                rl_lock *lock = &(lfd.f->lock_table[i]);
-                if (lock->nb_owners > 0) {
-                    remove_dead_owners(lock, &lfd, i);
-                }
+        for (int i = 0; i < NB_LOCKS; i++) {
+            rl_lock *lock = &(lfd.f->lock_table[i]);
+            if (lock->nb_owners > 0) {
+                remove_dead_owners(lock, &lfd, i);
             }
-        //check if first == -2
-        //printf("f-first = %d\n", lfd.f->first);
-        if(lfd.f->first == -2){
-            //check if its unlock return 0
-            if(lck->l_type == F_UNLCK){
+        }
+        
+        if (lfd.f->first == -2) {
+            if (lck->l_type == F_UNLCK) {
                 printf("unlock posé\n");
                 return 0;
             }
-            else if (lck->l_type == F_RDLCK || lck->l_type == F_WRLCK){
+            else if (lck->l_type == F_RDLCK || lck->l_type == F_WRLCK) {
                 lfd.f->first = 0;
                 rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lck->l_start, .len = lck->l_len, .next_lock = -1};
                 lfd.f->lock_table[0] = new_lock;
@@ -671,81 +669,116 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                 printf("1er lock posé\n");
                 return 0;
             }
-            else{
+            else {
                 // Commande non supportée
                 errno = EINVAL;
                 return -1;
             }
         }
-        else{
-            //printf("isTakenPostBoucle = %d\n", isTaken);
-            if(lck->l_type == F_UNLCK){
-                
+        else {
+            if (lck->l_type == F_UNLCK) {
                 unlock(lfd, lck, lfd_owner);
-                //print all lock and their owners pid
-                for(int i = 0; i < NB_LOCKS; i++){
+                // Afficher tous les verrous et les PID de leurs propriétaires
+                for (int i = 0; i < NB_LOCKS; i++) {
                     rl_lock *lock = &(lfd.f->lock_table[i]);
-                    if(lock->nb_owners > 0){
+                    if (lock->nb_owners > 0) {
                         printf("DANY %d\n", i);
-                        for(int j = 0; j < lock->nb_owners; j++){
+                        for (int j = 0; j < lock->nb_owners; j++) {
                             printf("proc %d des %d\n", lock->lock_owners[j].proc, lock->lock_owners[j].des);
                         }
                     }
-                    
                 }
-
             }
-            else if(lck->l_type == F_WRLCK || lck->l_type == F_RDLCK ){
-                            //check if the lock is already taken
+            else if (lck->l_type == F_WRLCK || lck->l_type == F_RDLCK) {
                 int isTaken = 0;
-                for(int i = 0;i < NB_LOCKS;i++){
+                for (int i = 0; i < NB_LOCKS; i++) {
                     rl_lock *lock = &(lfd.f->lock_table[i]);
-                    if(lock->nb_owners > 0){
-                        isTaken = checkChevauchement(i,lfd.f, lck, lfd_owner);
-                        //printf("isTaken = %d\n", isTaken);
-                        if(isTaken == -1){
+                    if (lock->nb_owners > 0) {
+                        isTaken = checkChevauchement(i, lfd.f, lck, lfd_owner);
+                        if (isTaken == -1) {
                             printf("lock déjà pris par un autre au même endroit\n");
                             return -1;
                         }
-                        if(isTaken == 1){
+                        if (isTaken == 1) {
                             printf("lock déjà pris par le même proprio donc à voir dans un intervalle commun\n");
                             break;
                         }
                     }
                 }
-                if(isTaken ==0){
+                if (isTaken == 0) {
                     printf("Aucun souci on pose le lock\n");
                     addNewLock(&lfd, lck, lfd_owner);
                 }
-                else{
-                    if(isTaken > 0 ){ 
-                        for(int i = 0;i < NB_LOCKS;i++){
+                else {
+                    if (isTaken > 0) {
+                        for (int i = 0; i < NB_LOCKS; i++) {
                             rl_lock *lock = &(lfd.f->lock_table[i]);
-                            if(lock->nb_owners > 0){
+                            if (lock->nb_owners > 0) {
                                 int lock_end = lock->starting_offset + lock->len;
                                 int lck_end = lck->l_start + lck->l_len;
-
                                 printf("lock compris entre %ld et %d\n", lock->starting_offset, lock_end);
                                 printf("lck compris entre %ld et %d\n", lck->l_start, lck_end);
-                                if(lock->starting_offset >= lck->l_start && lock_end >= lck_end){
-                                    //write case 
+                                if (lock->starting_offset >= lck->l_start && lock_end >= lck_end) {
+                                    if (lock->nb_owners > 1) {
+                                        printf("ici ?");
+                                        if (lock->type == F_RDLCK && lck->l_type == F_WRLCK) {
+                                            printf("Impossible de poser le verrou");
+                                            return -1;
+                                        }
+                                        else {
+                                            removeOwnerFromLock(lock, lfd_owner, &lfd, i);
+                                            rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lck_end, .len = lock_end - lck_end, .next_lock = -1};
+                                            for (int j = 0; j < NB_LOCKS; j++) {
+                                                rl_lock *lock2 = &(lfd.f->lock_table[j]);
+                                                if (lock2->next_lock == -2) {
+                                                    lfd.f->lock_table[j] = new_lock;
+                                                    lfd.f->lock_table[j].lock_owners[0] = lfd_owner;
+                                                    lfd.f->lock_table[j].nb_owners = 1;
+                                                    pthread_mutex_init(&(lfd.f->lock_table[j].lock_mutex), NULL);
+                                                    pthread_cond_init(&(lfd.f->lock_table[j].lock_condition), NULL);
+                                                    lock->next_lock = j;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        printf("ici ?");
+                                        if (lock->type == lck->l_type) {
+                                            lock->starting_offset = lck->l_start;
+                                            lock->len = lock_end - lck->l_start;
+                                            printf("Le verrou a été posé\n");
+                                            return 0;
+                                        }
+                                        else {
+                                            rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lck->l_start, .len = lck_end - lck->l_start, .next_lock = -1};
+                                            lock->starting_offset = lck_end;
+                                            lock->len = lock_end - lck_end;
+                                            for (int j = 0; j < NB_LOCKS; j++) {
+                                                rl_lock *lock2 = &(lfd.f->lock_table[j]);
+                                                if (lock2->next_lock == -2) {
+                                                    lfd.f->lock_table[j] = new_lock;
+                                                    lfd.f->lock_table[j].lock_owners[0] = lfd_owner;
+                                                    lfd.f->lock_table[j].nb_owners = 1;
+                                                    pthread_mutex_init(&(lfd.f->lock_table[j].lock_mutex), NULL);
+                                                    pthread_cond_init(&(lfd.f->lock_table[j].lock_condition), NULL);
+                                                    lock->next_lock = j;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                else {
+                                    // No overlapping, continue checking other locks
                                 }
                             }
                         }
-
                     }
                 }
-                
-                }
             }
-
-
-    } else {
-        // Commande non supportée
-        errno = EINVAL;
-        return -1;
+        }
     }
-    
+
     return 0;
 }
 

@@ -30,7 +30,8 @@ int main() {
     }
 
     lock.l_start = 5;
-    lock.l_len = 10;
+    lock.l_len = 10 ;
+    lock.l_type = F_RDLCK;
     if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
         printf("Vérouillage impossible\n");
         rl_close(descriptor);
@@ -38,14 +39,8 @@ int main() {
     }
 
 
-    lock.l_start = 10;
-    lock.l_len = 20;  // Verrouille tout le fichier   10-30
-    lock.l_type = F_UNLCK;
 
-    if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
-        perror("Erreur lors du déverrouillage du fichier");
-        return 1;
-    }
+    close(descriptor.d);
 
     /*lock.l_start = 50;
     lock.l_len = 20;  
@@ -79,7 +74,7 @@ int main() {
         return 1;
     }*/
 
-    sleep(600);
+    //sleep(600);
 
     /*lock.l_start = 0;
     lock.l_len = 5;
