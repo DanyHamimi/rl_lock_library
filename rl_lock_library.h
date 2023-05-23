@@ -12,6 +12,7 @@
 #define NB_FILES 256
 #define NB_LOCKS 256
 #define MAX_LOCKS 256
+#define PATH_MAX 256
 
 
 typedef struct{
@@ -34,13 +35,14 @@ typedef struct {
     int first;
     rl_lock lock_table[NB_LOCKS];
     pthread_mutex_t file_mutex; 
+    char pathname[PATH_MAX]; // On ajoute ce champs pour le 6.7 et pouvoir supprimer le shm quand tous les descripteurs associés à celui ci sont fermés
+    int nbtimes_opened;
 } rl_open_file;
 
 typedef struct{
     int d;
     rl_open_file *f;
 } rl_descriptor;
-
 
 //struct flock{
     //short rl_type; /* F_RDLCK F_WRLCK F_UNLCK */
@@ -49,7 +51,6 @@ typedef struct{
     //off_t len; /* la longueur de segment*/
    // pid_t pid; /* non utilisé dans le projet */
  //};
-
 rl_descriptor rl_open(const char *pathname, int oflag, ...);
 
 int rl_close(rl_descriptor fd);
@@ -65,4 +66,4 @@ pid_t rl_fork();
 
 int rl_init_library();
 
-#endif // RL_LOCK_LIBRARY_H
+#endif

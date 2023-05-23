@@ -9,7 +9,7 @@ int main() {
     rl_init_library();
 
     // Ouverture d'un fichier avec rl_open
-    rl_descriptor descriptor = rl_open("dany.txt", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    rl_descriptor descriptor = rl_open("test.txt", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if (descriptor.d == -1) {
         perror("Erreur lors de l'ouverture du fichier");
         return 1;
@@ -21,23 +21,13 @@ int main() {
     struct flock lock;
     lock.l_type = F_WRLCK;  // Verrou d'écriture
     lock.l_whence = SEEK_SET;
-    lock.l_start = 10;
-    lock.l_len = 20;  // Verrouille tout le fichier
+    lock.l_start = 2;
+    lock.l_len = 3;  // Verrouille tout le fichier
+
     if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
-        printf("Vérouillage impossible\n");
-        rl_close(descriptor);
+        perror("Erreur lors du verrouillage du fichier");
         return 1;
     }
-
-    lock.l_start = 0;
-    lock.l_len = 5;
-    rl_fcntl(descriptor, F_SETLK, &lock);
-
-    lock.l_start = 7;
-    lock.l_len = 2;
-    rl_fcntl(descriptor, F_SETLK, &lock);
-
-
 
     printf("Fichier verrouillé avec succès\n");
 
@@ -49,29 +39,25 @@ int main() {
     }
 
     printf("Message écrit dans le fichier\n");
-    
-    lock.l_whence = SEEK_SET;
-    lock.l_start = 0;
-    lock.l_len = 0;  // Verrouille tout le fichier
+    sleep(10);
 
-    if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
-        printf("Erreur lors du verrouillage du fichier\n");
-        rl_close(descriptor);
-        return 1;
-    }
     // Déverrouillage du fichier avec rl_fcntl
-    /*lock.l_type = F_UNLCK;
+    lock.l_type = F_UNLCK;
 
     if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
         perror("Erreur lors du déverrouillage du fichier");
         return 1;
     }
 
-    printf("Fichier déverrouillé avec succès\n");*/
+    printf("Fichier déverrouillé avec succès\n");
 
     // Fermeture du descripteur de fichier avec rl_close
-    /*if (rl_close(descriptor) == -1) {
+    if (rl_close(descriptor) == -1) {
         perror("Erreur lors de la fermeture du descripteur de fichier");
         return 1;
-    }*/
+    }
+
+    printf("Descripteur de fichier fermé avec succès\n");
+
+    return 0;
 }

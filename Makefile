@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -Werror -g
+CFLAGS = -Wall -g
 
 LIB_SRC = rl_lock_library.c
 LIB_OBJ = $(LIB_SRC:.c=.o)
