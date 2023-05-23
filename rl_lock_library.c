@@ -45,7 +45,33 @@ char *get_shm_name(const char *pathname, const char *prefix) {
     return shm_name;
 }
 
-
+static int removeOwnerFromLock(rl_lock *lock, owner lfd_owner,rl_descriptor* lfd, int i){
+    for (size_t j = 0; j < lock->nb_owners; j++) {
+        owner ow = lock->lock_owners[j];
+        if (ow.proc == lfd_owner.proc && ow.des == lfd_owner.des) {
+            for (size_t k = j; k < lock->nb_owners - 1; k++) {
+                //set values at 0 for the owner to be removed
+                lock->lock_owners[k].proc = 0;
+                lock->lock_owners[k].des = 0;
+            }
+            lock->nb_owners--;
+            if (lock->nb_owners == 0) {
+                for(int k = 0; k < NB_LOCKS; k++){
+                    if(lfd->f->lock_table[k].next_lock == i){
+                        lfd->f->lock_table[k].next_lock = lock->next_lock;
+                    }
+                }
+                pthread_mutex_destroy(&(lock->lock_mutex));
+                pthread_cond_destroy(&(lock->lock_condition));
+                lock->next_lock = -2;
+                lock->starting_offset = 0;
+                lock->len = 0;
+            }
+            return 0;
+        }
+    }
+    return -1;
+}
 
 rl_descriptor rl_open(const char *pathname, int oflag, ...) {
     rl_descriptor descriptor;
@@ -150,18 +176,8 @@ int rl_close(rl_descriptor lfd) {
             for (size_t j = 0; j < lock->nb_owners; j++) {
                 owner ow = lock->lock_owners[j];
                 if (ow.proc == lfd_owner.proc && ow.des == lfd_owner.des) {
-                    for (size_t k = j; k < lock->nb_owners - 1; k++) {
-                        lock->lock_owners[k] = lock->lock_owners[k + 1];
-                    }
-                    lock->nb_owners--;
-                    if (lock->nb_owners == 0) {
-                        pthread_mutex_destroy(&(lock->lock_mutex));
-                        pthread_cond_destroy(&(lock->lock_condition));
-                        lock->next_lock = -2;
-                        lock->starting_offset = 0;
-                        lock->len = 0;
-                    }
-                    break;
+                    removeOwnerFromLock(lock, lfd_owner, &lfd, i);
+                    printf("Le propriétaire a été supprimé\n");
                 }
                 else{
                 }
@@ -179,7 +195,7 @@ int rl_close(rl_descriptor lfd) {
                 if (rl_all_files.tab_open_files[i]->nbtimes_opened == 0) {
                     rl_all_files.tab_open_files[i] = NULL;
                     rl_all_files.nb_files--;
-                    //printf("fichier fermé il y a %d fichiers ouverts\n", rl_all_files.nb_files);
+                    printf("fichier fermé il y a %d fichiers ouverts\n", rl_all_files.nb_files);
                     break;
                 }
             }
@@ -207,7 +223,7 @@ int is_process_alive(pid_t pid) {
     return 0;
 }
 
-int printAllVerrousOccup(){
+static int printAllVerrousOccup(){
     for (int i = 0; i < NB_FILES; i++) {
         if (rl_all_files.tab_open_files[i] != NULL) {
             printf("fichier %s\n", rl_all_files.tab_open_files[i]->pathname);
@@ -227,7 +243,7 @@ int printAllVerrousOccup(){
     return 0;
 }
 
-int addOwnerToLock(int w, owner lfd_owner, rl_open_file* lfd){
+static int addOwnerToLock(int w, owner lfd_owner, rl_open_file* lfd){
     rl_lock *lock = &(lfd->lock_table[w]);
     printf("nb owners %ld\n", lock->nb_owners);
     for(int i = 0; i < NB_OWNERS; i++){
@@ -236,7 +252,6 @@ int addOwnerToLock(int w, owner lfd_owner, rl_open_file* lfd){
             lock->lock_owners[i] = lfd_owner;
             lock->nb_owners++;
             printf("Le propriétaire a été ajouté\n");
-            //print all propriétaires du verrou
             for(int j = 0; j < lock->nb_owners; j++){
                 printf("proc %d des %d\n", lock->lock_owners[j].proc, lock->lock_owners[j].des);
             }
@@ -248,7 +263,7 @@ int addOwnerToLock(int w, owner lfd_owner, rl_open_file* lfd){
     return -1;
 }
 
-int checkChevauchement(int w,rl_open_file* filedescr, struct flock *lck, owner lfd_owner) {
+static int checkChevauchement(int w,rl_open_file* filedescr, struct flock *lck, owner lfd_owner) {
     int isOwner = 0;
     rl_lock *lock = &(filedescr->lock_table[w]);
     
@@ -266,9 +281,7 @@ int checkChevauchement(int w,rl_open_file* filedescr, struct flock *lck, owner l
     off_t lck_end = lck->l_start + len;
     //printf("lock_end %ld lck_end %ld\n", lock_end, lck_end);
 
-    // Check for overlapping
     if (lock_end < lck->l_start || lck_end < lock->starting_offset) {
-        // No overlap
         return 0;
     } else if (isOwner) {
         // If the owner is trying to set a lock, it can merge with the existing one.
@@ -324,10 +337,6 @@ int checkChevauchement(int w,rl_open_file* filedescr, struct flock *lck, owner l
         if (lock->type == F_RDLCK && lck->l_type == F_RDLCK) {
             //if locks are the same position and length and both read locks then only add the owner to the lock and return 4
             if (lock->starting_offset == lck->l_start && lock_end == lck_end) {
-                if(addOwnerToLock(w, lfd_owner, filedescr) < 0){
-                    printf("Impossible le verrou est plein\n");
-                    return -1;
-                }
                 return 4;
             }
             // If both locks are read locks, allow it
@@ -339,7 +348,7 @@ int checkChevauchement(int w,rl_open_file* filedescr, struct flock *lck, owner l
     }
 }
 
-void remove_dead_owners(rl_lock *lock, rl_descriptor *lfd, int i) {
+static void remove_dead_owners(rl_lock *lock, rl_descriptor *lfd, int i) {
     // Supprime les propriétaires de verrous morts
     for (size_t j = 0; j < lock->nb_owners; j++) {
         owner ow = lock->lock_owners[j];
@@ -372,36 +381,9 @@ void remove_dead_owners(rl_lock *lock, rl_descriptor *lfd, int i) {
     }
 }
 
-int removeOwnerFromLock(rl_lock *lock, owner lfd_owner,rl_descriptor* lfd, int i){
-    for (size_t j = 0; j < lock->nb_owners; j++) {
-        owner ow = lock->lock_owners[j];
-        if (ow.proc == lfd_owner.proc && ow.des == lfd_owner.des) {
-            for (size_t k = j; k < lock->nb_owners - 1; k++) {
-                //set values at 0 for the owner to be removed
-                lock->lock_owners[k].proc = 0;
-                lock->lock_owners[k].des = 0;
-                lock->lock_owners[k] = lock->lock_owners[k + 1];
-            }
-            lock->nb_owners--;
-            if (lock->nb_owners == 0) {
-                for(int k = 0; k < NB_LOCKS; k++){
-                    if(lfd->f->lock_table[k].next_lock == i){
-                        lfd->f->lock_table[k].next_lock = lock->next_lock;
-                    }
-                }
-                pthread_mutex_destroy(&(lock->lock_mutex));
-                pthread_cond_destroy(&(lock->lock_condition));
-                lock->next_lock = -2;
-                lock->starting_offset = 0;
-                lock->len = 0;
-            }
-            return 0;
-        }
-    }
-    return -1;
-}
 
-int addNewLock(rl_descriptor* lfd, struct flock *lck, owner lfd_owner){
+
+static int addNewLock(rl_descriptor* lfd, struct flock *lck, owner lfd_owner){
     //parcourir les verrous du fichier via next_lock et ajouter le verrou à la fin
 
     int index = lfd->f->first;
@@ -440,7 +422,7 @@ int addNewLock(rl_descriptor* lfd, struct flock *lck, owner lfd_owner){
 
 
 
-int deletelocknowners(rl_descriptor* lfd,int i){
+static int deletelocknowners(rl_descriptor* lfd,int i){
     rl_lock *lock = &(lfd->f->lock_table[i]);
     if (lock->nb_owners == 0) {
         if(i == lfd->f->first){
@@ -466,7 +448,7 @@ int deletelocknowners(rl_descriptor* lfd,int i){
 }
 
 
-int unlock(rl_descriptor lfd, struct flock *lck, owner lfd_owner){
+static int unlock(rl_descriptor lfd, struct flock *lck, owner lfd_owner){
     for(int i = 0; i < NB_LOCKS; i++){
         rl_lock *lock = &(lfd.f->lock_table[i]);
         if(lock->nb_owners > 0){
@@ -479,7 +461,6 @@ int unlock(rl_descriptor lfd, struct flock *lck, owner lfd_owner){
                     if (ow.proc == lfd_owner.proc && ow.des == lfd_owner.des) {
                         // Supprimer le propriétaire du verrou
                         for (size_t k = j; k < lock->nb_owners - 1; k++) {
-                            lock->lock_owners[k] = lock->lock_owners[k + 1];
                         }
                         lock->nb_owners--;
                         // Si le verrou n'a plus de propriétaires, détruisez-le
@@ -644,10 +625,11 @@ int unlock(rl_descriptor lfd, struct flock *lck, owner lfd_owner){
 }
 
 int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
+    pthread_mutex_lock(&(lfd.f->file_mutex));
     printAllVerrousOccup();
     owner lfd_owner = {.proc = getpid(), .des = lfd.d};
     
-    if (cmd == F_SETLK) {
+    if (cmd == F_SETLK || cmd == F_SETLKW) {
         for (int i = 0; i < NB_LOCKS; i++) {
             rl_lock *lock = &(lfd.f->lock_table[i]);
             if (lock->nb_owners > 0) {
@@ -658,6 +640,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
         if (lfd.f->first == -2) {
             if (lck->l_type == F_UNLCK) {
                 printf("unlock posé\n");
+                pthread_mutex_unlock(&(lfd.f->file_mutex));
                 return 0;
             }
             else if (lck->l_type == F_RDLCK || lck->l_type == F_WRLCK) {
@@ -669,11 +652,13 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                 pthread_mutex_init(&(lfd.f->lock_table[0].lock_mutex), NULL);
                 pthread_cond_init(&(lfd.f->lock_table[0].lock_condition), NULL);
                 printf("1er lock posé\n");
+                pthread_mutex_unlock(&(lfd.f->file_mutex));
                 return 0;
             }
             else {
                 // Commande non supportée
                 errno = EINVAL;
+                pthread_mutex_unlock(&(lfd.f->file_mutex));
                 return -1;
             }
         }
@@ -684,7 +669,6 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                 for (int i = 0; i < NB_LOCKS; i++) {
                     rl_lock *lock = &(lfd.f->lock_table[i]);
                     if (lock->nb_owners > 0) {
-                        printf("DANY %d\n", i);
                         for (int j = 0; j < lock->nb_owners; j++) {
                             printf("proc %d des %d\n", lock->lock_owners[j].proc, lock->lock_owners[j].des);
                         }
@@ -693,23 +677,35 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
             }
             else if (lck->l_type == F_WRLCK || lck->l_type == F_RDLCK) {
                 int isTaken = 0;
+                int lock_id = -1;
                 for (int i = 0; i < NB_LOCKS; i++) {
                     rl_lock *lock = &(lfd.f->lock_table[i]);
-                    if (lock->nb_owners > 0) {
+                    if (lock->nb_owners > 0) {  
                         isTaken = checkChevauchement(i, lfd.f, lck, lfd_owner);
                         if (isTaken == -1) {
                             printf("lock déjà pris par un autre au même endroit\n");
-                            return -1;
+                            pthread_mutex_unlock(&(lfd.f->file_mutex));
+                            if(cmd == F_SETLKW){
+                                //suspend signal avec sigsuspend et attendre que le verrou soit libre 
+                            }
+                            else{
+                                return -1;      
+                            }
+                            
                         }
-                        if (isTaken == 1) {
-                            printf("lock déjà pris par le même proprio donc à voir dans un intervalle commun\n");
-                            break;
+                        if (isTaken == 4){
+                            lock_id = i;
                         }
                     }
                 }
-                if (isTaken == 0) {
-                    printf("Aucun souci on pose le lock\n");
-                    addNewLock(&lfd, lck, lfd_owner);
+                if (isTaken == 0 || isTaken == 4) {
+                    printf("ajout au lock !\n");
+                    if(isTaken == 4){
+                        addOwnerToLock(lock_id,lfd_owner,lfd.f);
+                    }
+                    else{
+                        addNewLock(&lfd, lck, lfd_owner);
+                    }
                 }
                 else {
                     if (isTaken > 0) {
@@ -720,11 +716,12 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                 int lck_end = lck->l_start + lck->l_len;
                                 printf("lock compris entre %ld et %d\n", lock->starting_offset, lock_end);
                                 printf("lck compris entre %ld et %d\n", lck->l_start, lck_end);
-                                if (lock->starting_offset >= lck->l_start && lock_end >= lck_end) {
+                                if (lock->starting_offset >= lck->l_start && lock_end >= lck_end) { // PREFIXE
+                                    printf("prefixe");
                                     if (lock->nb_owners > 1) {
-                                        printf("ici ?");
                                         if (lock->type == F_RDLCK && lck->l_type == F_WRLCK) {
                                             printf("Impossible de poser le verrou");
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return -1;
                                         }
                                         else {
@@ -743,6 +740,9 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                                     break;
                                                 }
                                             }
+                                            printf("PREFIX ADDED\n");
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            return 0;
                                         }
                                     }
                                     else {
@@ -751,6 +751,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                             lock->len = lock_end - lck->l_start;
                                             printf("Le verrou couvre de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
                                             printf("Le verrou a été posé\n");
+                                            printf("PREFIX ADDED\n");
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return 0;
                                         }
                                         else {
@@ -770,15 +772,19 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                                     break;
                                                 }
                                             }
+                                            printf("PREFIX ADDED\n");
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            return 0;
                                         }
                                     }
                                 }
-                                else if(lock->starting_offset <= lck->l_start && lock_end <= lck_end){
+                                else if(lock->starting_offset <= lck->l_start && lock_end <= lck_end){ //SUFFIXE
                                     printf("hello");
                                     if(lock->nb_owners > 1){
                                         //je peux passer d'écriture à lecture mais pas l'inverse 
                                         if(lock->type == F_RDLCK && lck->l_type == F_WRLCK){
                                             printf("Impossible de poser le verou");
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return -1;
                                         }
                                         else{
@@ -800,6 +806,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                                     break;
                                                 }
                                             }
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            return 0;
                                         }
 
                                         }
@@ -808,8 +816,9 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                         if(lock->type == lck->l_type){
                                             lock->starting_offset = lock->starting_offset;
                                             lock->len = lck_end - lock->starting_offset;
-                                            printf("Le verrou a été posé\n");
+                                            printf("Le verrou a été posé SUFFIXE\n");
                                             printf("le verrou couvre de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return 0;
                                         }
                                         else{
@@ -830,9 +839,14 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                                     pthread_cond_init(&(lfd.f->lock_table[j].lock_condition), NULL);
                                                     lock->next_lock = j;
                                                     break;
+                                                }
                                             }
+                                            printf("Le verrou a été posé SUFFIXE\n");
                                         }
                                     }
+                                }
+                                else{
+                                    
                                 }
                             }
                         }
@@ -841,8 +855,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
             }
         }
     }
-    }
-
+    pthread_mutex_unlock(&(lfd.f->file_mutex));
     return 0;
 }
 
