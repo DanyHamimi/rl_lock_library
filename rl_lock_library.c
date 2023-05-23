@@ -594,22 +594,44 @@ static int signal_handler(int sig){
 }
 
 int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
-    //pthread_mutex_lock(&(lfd.f->file_mutex));
+    pthread_mutex_lock(&(lfd.f->file_mutex));
     printAllVerrousOccup();
     owner lfd_owner = {.proc = getpid(), .des = lfd.d};
     
     if (cmd == F_SETLK || cmd == F_SETLKW) {
+
         for (int i = 0; i < NB_LOCKS; i++) {
             rl_lock *lock = &(lfd.f->lock_table[i]);
             if (lock->nb_owners > 0) {
                 remove_dead_owners(lock, &lfd, i);
             }
         }
-        
+        printf("lfdfirst %d\n", lfd.f->first);
+        int count = 0;
+        for (int i = 0; i < NB_LOCKS; i++) {
+            rl_lock *lock = &(lfd.f->lock_table[i]);
+            if (lock->nb_owners > 0) {
+                count++;
+                printf("verrou %d\n", i);
+                for (int j = 0; j < lock->nb_owners; j++) {
+                    printf("proc %d des %d\n", lock->lock_owners[j].proc, lock->lock_owners[j].des);
+                    //print intervalle du verou
+                    printf("de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
+                }
+            }
+        }
+        if (count == 0) {
+            printf("aucun verrou\n");
+            if(lfd.f->first != -2){
+                lfd.f->first = -2;
+                printf("lfdfirst %d\n", lfd.f->first);
+            }
+        }
         if (lfd.f->first == -2) {
+            printf("ici\n");
             if (lck->l_type == F_UNLCK) {
                 printf("unlock posé\n");
-                //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                pthread_mutex_unlock(&(lfd.f->file_mutex));
                 return 0;
             }
             else if (lck->l_type == F_RDLCK || lck->l_type == F_WRLCK) {
@@ -621,13 +643,13 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                 pthread_mutex_init(&(lfd.f->lock_table[0].lock_mutex), NULL);
                 pthread_cond_init(&(lfd.f->lock_table[0].lock_condition), NULL);
                 printf("1er lock posé\n");
-                //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                pthread_mutex_unlock(&(lfd.f->file_mutex));
                 return 1;
             }
             else {
                 // Commande non supportée
                 errno = EINVAL;
-                //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                pthread_mutex_unlock(&(lfd.f->file_mutex));
                 return -1;
             }
         }
@@ -653,7 +675,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                         isTaken = checkChevauchement(i, lfd.f, lck, lfd_owner);
                         if (isTaken == -1) {
                             printf("lock déjà pris par un autre au même endroit\n");
-                            //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                             if(cmd == F_SETLKW){
                                 printf("salut");
                                 //suspend signal avec sigsuspend et attendre que le verrou soit libre 
@@ -718,7 +740,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                             /*for(int i = 0; i < NB_LOCKS; i++){
                                 printf("lock %d : %d\n", i, lfd.f->lock_table[i].next_lock);
                             }*/
-                            //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                             return 0;
                             
 
@@ -738,7 +760,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                     if (lock->nb_owners > 1) {
                                         if (lock->type == F_RDLCK && lck->l_type == F_WRLCK) {
                                             printf("Impossible de poser le verrou");
-                                            //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return -1;
                                         }
                                         else {
@@ -758,7 +780,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                                 }
                                             }
                                             printf("PREFIX ADDED\n");
-                                            //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return 0;
                                         }
                                     }
@@ -769,7 +791,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                             printf("Le verrou couvre de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
                                             printf("Le verrou a été posé\n");
                                             printf("PREFIX ADDED\n");
-                                            //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return 0;
                                         }
                                         else {
@@ -790,18 +812,17 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                                 }
                                             }
                                             printf("PREFIX ADDED\n");
-                                            //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return 0;
                                         }
                                     }
                                 }
                                 else if(lock->starting_offset <= lck->l_start && lock_end <= lck_end){ //SUFFIXE
-                                    printf("hello");
                                     if(lock->nb_owners > 1){
                                         //je peux passer d'écriture à lecture mais pas l'inverse 
                                         if(lock->type == F_RDLCK && lck->l_type == F_WRLCK){
                                             printf("Impossible de poser le verou");
-                                            //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return -1;
                                         }
                                         else{
@@ -823,7 +844,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                                     break;
                                                 }
                                             }
-                                            //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return 0;
                                         }
 
@@ -835,7 +856,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                             lock->len = lck_end - lock->starting_offset;
                                             printf("Le verrou a été posé SUFFIXE\n");
                                             printf("le verrou couvre de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
-                                            //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return 0;
                                         }
                                         else{
@@ -864,7 +885,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                 }
                                 else if(lock->starting_offset < lck->l_start && lock_end > lck_end){
                                     if(lock->nb_owners == 1 && lock->type == lck->l_type){
-                                        //pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                        pthread_mutex_unlock(&(lfd.f->file_mutex));
                                         return -1;
                                     }
                                 }
@@ -875,7 +896,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
             }
         }
     }
-    //pthread_mutex_unlock(&(lfd.f->file_mutex));
+    pthread_mutex_unlock(&(lfd.f->file_mutex));
     return 0;
 }
 
