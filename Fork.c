@@ -10,7 +10,7 @@ int main() {
     rl_init_library();
 
     // Ouverture d'un fichier avec rl_open
-    rl_descriptor descriptor = rl_open("daniel", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    rl_descriptor descriptor = rl_open("oui", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if (descriptor.d == -1) {
         perror("Erreur lors de l'ouverture du fichier");
         return 1;
@@ -29,22 +29,13 @@ int main() {
         rl_close(descriptor);
         return 1;
     }
-        printf("cc\n");
-
-    rl_descriptor descriptor2 = rl_open("azert", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-    if (descriptor2.d == -1) {
-        perror("Erreur lors de l'ouverture du fichier");
-        return 1;
+    pid_t a = rl_fork();
+    if(a == 0){
+        printf("Fils\n");
     }
-    if (rl_fcntl(descriptor2, F_SETLK, &lock) == -1) {
-        printf("Vérouillage impossible\n");
-        rl_close(descriptor);
-        return 1;
+    else{
+        printf("Pere\n");
     }
-    rl_close(descriptor2);
-
-
-    return 0;
     
 
     
