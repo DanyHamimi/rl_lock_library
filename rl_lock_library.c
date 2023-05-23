@@ -38,7 +38,7 @@ char *get_shm_name(const char *pathname, const char *prefix) {
         return NULL;
     }
     char *shm_name = NULL;
-    if (asprintf(&shm_name, "/%s_%lu_%llu", prefix, st.st_dev, (unsigned long long) st.st_ino) == -1) {
+    if (asprintf(&shm_name, "/%s_%d_%llu", prefix, st.st_dev, (unsigned long long) st.st_ino) == -1) {
         return NULL;
     }
     //printf("shm_name: %s\n", shm_name);
@@ -233,7 +233,7 @@ static int printAllVerrousOccup(){
                     for (int k = 0; k < lock->nb_owners; k++) {
                         printf("proc %d des %d\n", lock->lock_owners[k].proc, lock->lock_owners[k].des);
                         //print intervalle du verou
-                        printf("de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
+                        printf("de %lld à %lld\n", lock->starting_offset, lock->starting_offset + lock->len);
                     }
                 }
             }
@@ -531,8 +531,8 @@ static int unlock(rl_descriptor lfd, struct flock *lck, owner lfd_owner){
                     lfd.f->lock_table[i].nb_owners = 1;
                     pthread_mutex_init(&(lfd.f->lock_table[i].lock_mutex), NULL);
                     pthread_cond_init(&(lfd.f->lock_table[i].lock_condition), NULL);
-                    printf("Le verrou a été débloqué dans l'interval : %ld - %ld\n", lck->l_start, lck_end);
-                    printf("Le verrou existant maintenant est dans l'intervalle : %ld - %ld\n", lfd.f->lock_table[i].starting_offset, lfd.f->lock_table[i].starting_offset + lfd.f->lock_table[i].len);
+                    printf("Le verrou a été débloqué dans l'interval : %lld - %lld\n", lck->l_start, lck_end);
+                    printf("Le verrou existant maintenant est dans l'intervalle : %lld - %lld\n", lfd.f->lock_table[i].starting_offset, lfd.f->lock_table[i].starting_offset + lfd.f->lock_table[i].len);
                     return 0;
                 }
                 //si le verrou à débloquer est un suffixe du verrou existant
@@ -575,7 +575,7 @@ static int unlock(rl_descriptor lfd, struct flock *lck, owner lfd_owner){
                             break;
                         }
                     }
-                    printf("Les nouveaux verrous sont maintenant : %ld - %ld et %ld - %ld\n", lfd.f->lock_table[i].starting_offset, lfd.f->lock_table[i].starting_offset + lfd.f->lock_table[i].len, lfd.f->lock_table[lfd.f->lock_table[i].next_lock].starting_offset, lfd.f->lock_table[lfd.f->lock_table[i].next_lock].starting_offset + lfd.f->lock_table[lfd.f->lock_table[i].next_lock].len);
+                    printf("Les nouveaux verrous sont maintenant : %lld - %lld et %lld - %lld\n", lfd.f->lock_table[i].starting_offset, lfd.f->lock_table[i].starting_offset + lfd.f->lock_table[i].len, lfd.f->lock_table[lfd.f->lock_table[i].next_lock].starting_offset, lfd.f->lock_table[lfd.f->lock_table[i].next_lock].starting_offset + lfd.f->lock_table[lfd.f->lock_table[i].next_lock].len);
                     printf("Le verrou a été débloqué\n");
                     return 0;
                 }
@@ -588,10 +588,10 @@ static int unlock(rl_descriptor lfd, struct flock *lck, owner lfd_owner){
 }
 
 
-static int signal_handler(int sig){
+/*static int signal_handler(int sig){
     printf("signal reçu\n");
     return 0;
-}
+}*/
 
 int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
     pthread_mutex_lock(&(lfd.f->file_mutex));
@@ -616,7 +616,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                 for (int j = 0; j < lock->nb_owners; j++) {
                     printf("proc %d des %d\n", lock->lock_owners[j].proc, lock->lock_owners[j].des);
                     //print intervalle du verou
-                    printf("de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
+                    printf("de %lld à %lld\n", lock->starting_offset, lock->starting_offset + lock->len);
                 }
             }
         }
@@ -679,19 +679,19 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                             if(cmd == F_SETLKW){
                                 printf("salut");
                                 //suspend signal avec sigsuspend et attendre que le verrou soit libre 
-                                sigset_t mask;
-                                sigemptyset(&mask);
-                                sigaddset(&mask, SIGUSR1);
+                                //sigset_t mask;
+                                //sigemptyset(&mask);
+                                //sigaddset(&mask, SIGUSR1);
 
-                                struct sigaction action;
-                                action.sa_handler = (__sighandler_t)signal_handler;
+                                //struct sigaction action;
+                                //action.sa_handler = (__sighandler_t)signal_handler;
 
-                                sigemptyset(&action.sa_mask);
+                                /*sigemptyset(&action.sa_mask);
                                 action.sa_flags = 0;
                                 sigaction(SIGUSR1, &action, NULL);
 
                                 sigsuspend(&mask);
-                                printf("signal reçu\n");
+                                printf("signal reçu\n");*/
                                 return 0;
                             }
                             else{
@@ -718,7 +718,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                 old_index = index;
                                 index = lfd.f->lock_table[index].next_lock;
                             }
-                            int valNewLock;
+                            int valNewLock = 0;
                             //find the first empty lock
                             for(int i = 0;i < NB_LOCKS; i++){
                                 if(lfd.f->lock_table[i].next_lock == -2){
@@ -753,8 +753,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                             if (lock->nb_owners > 0) {
                                 int lock_end = lock->starting_offset + lock->len;
                                 int lck_end = lck->l_start + lck->l_len;
-                                printf("lock compris entre %ld et %d\n", lock->starting_offset, lock_end);
-                                printf("lck compris entre %ld et %d\n", lck->l_start, lck_end);
+                                printf("lock compris entre %lld et %d\n", lock->starting_offset, lock_end);
+                                printf("lck compris entre %lld et %d\n", lck->l_start, lck_end);
                                 if (lock->starting_offset >= lck->l_start && lock_end >= lck_end) { // PREFIXE
                                     printf("prefixe");
                                     if (lock->nb_owners > 1) {
@@ -766,7 +766,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                         else {
                                             removeOwnerFromLock(lock, lfd_owner, &lfd, i);
                                             rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lck->l_start, .len = lock_end - lck_end, .next_lock = -1};
-                                            printf("lock posé de %ld à %ld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
+                                            printf("lock posé de %lld à %lld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
                                             for (int j = 0; j < NB_LOCKS; j++) {
                                                 rl_lock *lock2 = &(lfd.f->lock_table[j]);
                                                 if (lock2->next_lock == -2) {
@@ -788,7 +788,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                         if (lock->type == lck->l_type) {
                                             lock->starting_offset = lck->l_start;
                                             lock->len = lock_end - lck->l_start;
-                                            printf("Le verrou couvre de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
+                                            printf("Le verrou couvre de %lld à %lld\n", lock->starting_offset, lock->starting_offset + lock->len);
                                             printf("Le verrou a été posé\n");
                                             printf("PREFIX ADDED\n");
                                             pthread_mutex_unlock(&(lfd.f->file_mutex));
@@ -796,7 +796,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                         }
                                         else {
                                             rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lck->l_start, .len = lck_end - lck->l_start, .next_lock = -1};
-                                            printf("lock posé de %ld à %ld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
+                                            printf("lock posé de %lld à %lld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
                                             lock->starting_offset = lck_end;
                                             lock->len = lock_end - lck_end;
                                             for (int j = 0; j < NB_LOCKS; j++) {
@@ -830,7 +830,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                             removeOwnerFromLock(lock, lfd_owner, &lfd, i);
                                             //Create a new lock with the beginning of the existing lock and the end of the new lock
                                             rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lock->starting_offset, .len = lck->l_start - lock->starting_offset, .next_lock = -1};
-                                            printf("Nouveau verou de %ld à %ld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
+                                            printf("Nouveau verou de %lld à %lld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
                                             //on ajoute le nouveau verrou à la fin
                                             for(int j = 0; j < NB_LOCKS; j++){
                                                 rl_lock *lock2 = &(lfd.f->lock_table[j]);
@@ -855,7 +855,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                             lock->starting_offset = lock->starting_offset;
                                             lock->len = lck_end - lock->starting_offset;
                                             printf("Le verrou a été posé SUFFIXE\n");
-                                            printf("le verrou couvre de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
+                                            printf("le verrou couvre de %lld à %lld\n", lock->starting_offset, lock->starting_offset + lock->len);
                                             pthread_mutex_unlock(&(lfd.f->file_mutex));
                                             return 0;
                                         }
@@ -864,7 +864,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                             printf("%d",a);
                                             //si ce n'est pas le meme type on crée un verrou de lck_start à lck_end avec le type de lck et on modifie le verrou lock pour qu'il termine a lck_start
                                             rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lck->l_start, .len = lck->l_len, .next_lock = -1};
-                                            printf("Nouveau verou de %ld à %ld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
+                                            printf("Nouveau verou de %lld à %lld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
                                             lock->len = lck->l_start - lock->starting_offset;
                                             //on ajoute le nouveau verrou à la fin
                                             for(int j = 0; j < NB_LOCKS; j++){
