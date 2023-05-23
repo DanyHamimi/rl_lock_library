@@ -9,7 +9,7 @@ int main() {
     rl_init_library();
 
     // Ouverture d'un fichier avec rl_open
-    rl_descriptor descriptor = rl_open("dany.txt", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    rl_descriptor descriptor = rl_open("dan.txt", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if (descriptor.d == -1) {
         perror("Erreur lors de l'ouverture du fichier");
         return 1;
@@ -19,17 +19,69 @@ int main() {
 
     // Verrouillage du fichier avec rl_fcntl
     struct flock lock;
-    lock.l_type = F_WRLCK;  // Verrou d'écriture
+    lock.l_type = F_RDLCK;  // Verrou d'écriture
     lock.l_whence = SEEK_SET;
     lock.l_start = 10;
-    lock.l_len = 20;  // Verrouille tout le fichier
+    lock.l_len = 20;  // Verrouille tout le fichier   10-30
     if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
         printf("Vérouillage impossible\n");
         rl_close(descriptor);
         return 1;
     }
 
+    lock.l_start = 5;
+    lock.l_len = 10;
+    if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
+        printf("Vérouillage impossible\n");
+        rl_close(descriptor);
+        return 1;
+    }
+
+
+    lock.l_start = 10;
+    lock.l_len = 20;  // Verrouille tout le fichier   10-30
+    lock.l_type = F_UNLCK;
+
+    if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
+        perror("Erreur lors du déverrouillage du fichier");
+        return 1;
+    }
+
+    /*lock.l_start = 50;
+    lock.l_len = 20;  
+    if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
+        printf("Vérouillage impossible\n");
+        rl_close(descriptor);
+        return 1;
+    }
+
+    lock.l_start = 200;
+    lock.l_len = 20;  
+    if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
+        printf("Vérouillage impossible\n");
+        rl_close(descriptor);
+        return 1;
+    }
+
+    lock.l_type = F_UNLCK;
+    lock.l_start = 50;
+    lock.l_len = 20; 
+
+    if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
+        perror("Erreur lors du déverrouillage du fichier");
+        return 1;
+    }
+    lock.l_type = F_WRLCK;  // Verrou de lecture
     lock.l_start = 0;
+    lock.l_len = 50; // 5-15
+    if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
+        perror("Erreur lors du déverrouillage du fichier");
+        return 1;
+    }*/
+
+    sleep(600);
+
+    /*lock.l_start = 0;
     lock.l_len = 5;
     rl_fcntl(descriptor, F_SETLK, &lock);
 
@@ -59,7 +111,7 @@ int main() {
         rl_close(descriptor);
         return 1;
     }
-    // Déverrouillage du fichier avec rl_fcntl
+    // Déverrouillage du fichier avec rl_fcntl*/
     /*lock.l_type = F_UNLCK;
 
     if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
