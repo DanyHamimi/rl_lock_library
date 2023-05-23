@@ -231,7 +231,7 @@ static int printAllVerrousOccup(){
                 if (lock->nb_owners > 0) {
                     printf("verrou %d\n", j);
                     for (int k = 0; k < lock->nb_owners; k++) {
-                        printf("proc %d des %d\n", lock->lock_owners[k].proc, lock->lock_owners[k].des);
+                        printf("proc %d des %d\n", (int)lock->lock_owners[k].proc, (int)lock->lock_owners[k].des);
                         //print intervalle du verou
                         printf("de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
                     }
@@ -661,7 +661,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                     rl_lock *lock = &(lfd.f->lock_table[i]);
                     if (lock->nb_owners > 0) {
                         for (int j = 0; j < lock->nb_owners; j++) {
-                            printf("proc %d des %d\n", lock->lock_owners[j].proc, lock->lock_owners[j].des);
+                            printf("proc %d des %d\n", (int)lock->lock_owners[j].proc, (int)lock->lock_owners[j].des);
                         }
                     }
                 }
@@ -864,7 +864,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                             printf("%d",a);
                                             //si ce n'est pas le meme type on crée un verrou de lck_start à lck_end avec le type de lck et on modifie le verrou lock pour qu'il termine a lck_start
                                             rl_lock new_lock = {.lock_owners = {lfd_owner}, .nb_owners = 1, .type = lck->l_type, .starting_offset = lck->l_start, .len = lck->l_len, .next_lock = -1};
-                                            printf("Nouveau verou de %ld à %lld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
+                                            printf("Nouveau verrou de %ld à %ld\n", new_lock.starting_offset, new_lock.starting_offset + new_lock.len);
                                             lock->len = lck->l_start - lock->starting_offset;
                                             //on ajoute le nouveau verrou à la fin
                                             for(int j = 0; j < NB_LOCKS; j++){
