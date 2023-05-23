@@ -244,7 +244,8 @@ static int printAllVerrousOccup(){
 
 static int addOwnerToLock(int w, owner lfd_owner, rl_open_file* lfd){
     rl_lock *lock = &(lfd->lock_table[w]);
-    printf("nb owners %ld\n", lock->nb_owners);
+    printf("nb owners %zu\n", lock->nb_owners);
+
     for(int i = 0; i < NB_OWNERS; i++){
     printf("proc %d des %d\n", (int)lock->lock_owners[i].proc, (int)lock->lock_owners[i].des);
         if(lock->lock_owners[i].proc == 0 && lock->lock_owners[i].des == 0){
@@ -255,7 +256,8 @@ static int addOwnerToLock(int w, owner lfd_owner, rl_open_file* lfd){
                 printf("proc %d des %d\n", (int)lock->lock_owners[j].proc, (int)lock->lock_owners[j].des);
             }
             return 0;
-            printf("nb owners %ld\n", lock->nb_owners);
+            printf("nb owners %zu\n", lock->nb_owners);
+
 
         }
     }
