@@ -1,5 +1,8 @@
 // HAMIMI Dany 21952735
 // KAABECHE Rayane 21955498
+
+#define _GNU_SOURCE
+
 #include "rl_lock_library.h"
 #include <errno.h>
 #include <stdlib.h>
@@ -12,6 +15,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <signal.h>
+
 
 
 static struct {
@@ -34,7 +38,7 @@ char *get_shm_name(const char *pathname, const char *prefix) {
         return NULL;
     }
     char *shm_name = NULL;
-    if (asprintf(&shm_name, "/%s_%u_%llu", prefix, st.st_dev, (unsigned long long) st.st_ino) == -1) {
+    if (asprintf(&shm_name, "/%s_%lu_%llu", prefix, st.st_dev, (unsigned long long) st.st_ino) == -1) {
         return NULL;
     }
     printf("shm_name: %s\n", shm_name);
@@ -216,7 +220,7 @@ int printAllVerrousOccup(){
                     for (int k = 0; k < lock->nb_owners; k++) {
                         printf("proc %d des %d\n", lock->lock_owners[k].proc, lock->lock_owners[k].des);
                         //print intervalle du verou
-                        printf("de %lld à %lld\n", lock->starting_offset, lock->starting_offset + lock->len);
+                        printf("de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
                     }
                 }
             }
@@ -240,7 +244,7 @@ int checkChevauchement(int w,rl_open_file filedescr, struct flock *lck, owner lf
     }
     off_t lock_end = lock->starting_offset + lock->len;
     off_t lck_end = lck->l_start + len;
-    printf("lock_end %lld lck_end %lld\n", lock_end, lck_end);
+    printf("lock_end %ld lck_end %ld\n", lock_end, lck_end);
 
     // Check for overlapping
     if (lock_end < lck->l_start || lck_end < lock->starting_offset) {
@@ -412,7 +416,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                 printf("Aucun verrou correspondant trouvé pour débloquer\n");
                 return 0;
             }
-            else if(lck->l_type == F_WRLCK |lck->l_type == F_RDLCK ){
+            else if(lck->l_type == F_WRLCK || lck->l_type == F_RDLCK ){
                 if(isTaken ==0){
                     //while the next of first is not -1 we go to the next
                     int next = lfd.f->first;

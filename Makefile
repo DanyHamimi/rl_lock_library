@@ -1,5 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -g
+CFLAGS = -Wall -g -pthread -std=gnu99
+LIBS = -lrt
 
 LIB_SRC = rl_lock_library.c
 LIB_OBJ = $(LIB_SRC:.c=.o)
@@ -12,7 +13,7 @@ OBJ = $(SRC:.c=.o)
 all: $(TARGET)
 
 $(TARGET): $(OBJ) $(LIB)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 $(LIB): $(LIB_OBJ)
 	ar rcs $@ $^
