@@ -1,0 +1,43 @@
+#include "rl_lock_library.h"
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+
+int main() {
+    rl_init_library();
+
+    // Ouverture d'un fichier avec rl_open
+    rl_descriptor descriptor = rl_open("fichier.txt", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    if (descriptor.d == -1) {
+        perror("Erreur lors de l'ouverture du fichier");
+        return 1;
+    }
+
+    printf("Fichier ouvert avec succès\n");
+
+    // Verrouillage du fichier avec rl_fcntl
+    struct flock lock;
+    lock.l_type = F_RDLCK;  // Verrou d'écriture
+    lock.l_whence = SEEK_SET;
+    lock.l_start = 10;
+    lock.l_len = 20;  // Verrouille tout le fichier   10-30
+    if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
+        printf("Vérouillage impossible\n");
+        rl_close(descriptor);
+        return 1;
+    }
+    printf("Vérouillage réussi\n");
+
+    lock.l_type = F_UNLCK;
+    if (rl_fcntl(descriptor, F_SETLK, &lock) == -1) {
+        printf("Vérouillage impossible\n");
+        rl_close(descriptor);
+        return 1;
+    }
+    printf("dévérouillage réussi\n");
+
+    close(descriptor.d);
+    printf("Fermeture réussie\n");
+
+}
