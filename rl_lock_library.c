@@ -222,7 +222,7 @@ int is_process_alive(pid_t pid) {
     return 0;
 }
 
-static int printAllVerrousOccup(){
+int printAllVerrousOccup(){
     for (int i = 0; i < NB_FILES; i++) {
         if (rl_all_files.tab_open_files[i] != NULL) {
             printf("fichier %s\n", rl_all_files.tab_open_files[i]->pathname);
@@ -351,6 +351,7 @@ static int checkChevauchement(int w,rl_open_file* filedescr, struct flock *lck, 
 
 
 static void remove_dead_owners(rl_lock *lock, rl_descriptor *lfd, int i) {
+    rl_close(*lfd);
     // Supprime les propriétaires de verrous morts
     for (size_t j = 0; j < lock->nb_owners; j++) {
         owner ow = lock->lock_owners[j];
@@ -634,6 +635,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
             if (lck->l_type == F_UNLCK) {
                 printf("unlock posé\n");
                 pthread_mutex_unlock(&(lfd.f->file_mutex));
+                printf("Liste acutelle des verrous : \n");
+                printAllVerrousOccup();
                 return 0;
             }
             else if (lck->l_type == F_RDLCK || lck->l_type == F_WRLCK) {
@@ -645,7 +648,10 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                 pthread_mutex_init(&(lfd.f->lock_table[0].lock_mutex), NULL);
                 pthread_cond_init(&(lfd.f->lock_table[0].lock_condition), NULL);
                 printf("1er lock posé\n");
+                printf("Liste acutelle des verrous : \n");
+                printAllVerrousOccup();
                 pthread_mutex_unlock(&(lfd.f->file_mutex));
+                
                 return 1;
             }
             else {
@@ -706,7 +712,7 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                         }
                     }
                 }
-                if (isTaken > 0) {
+                if (isTaken > 0 && isTaken != 9 && isTaken != 10) {
                     printf("ajout au lock !\n");
                     printf("isTaken : %d\n", isTaken);
                     if(isTaken == 4){
@@ -743,6 +749,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                 printf("lock %d : %d\n", i, lfd.f->lock_table[i].next_lock);
                             }*/
                             pthread_mutex_unlock(&(lfd.f->file_mutex));
+                            printf("Liste acutelle des verrous : \n");
+                            printAllVerrousOccup();
                             return 0;
                             
 
@@ -783,6 +791,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                             }
                                             printf("PREFIX ADDED\n");
                                             pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            printf("Liste acutelle des verrous : \n");
+                                            printAllVerrousOccup();
                                             return 0;
                                         }
                                     }
@@ -794,6 +804,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                             printf("Le verrou a été posé\n");
                                             printf("PREFIX ADDED\n");
                                             pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            printf("Liste acutelle des verrous : \n");
+                                            printAllVerrousOccup();
                                             return 0;
                                         }
                                         else {
@@ -815,6 +827,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                             }
                                             printf("PREFIX ADDED\n");
                                             pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            printf("Liste acutelle des verrous : \n");
+                                            printAllVerrousOccup();
                                             return 0;
                                         }
                                     }
@@ -847,6 +861,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                                 }
                                             }
                                             pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            printf("Liste acutelle des verrous : \n");
+                                             printAllVerrousOccup();
                                             return 0;
                                         }
 
@@ -859,6 +875,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                             printf("Le verrou a été posé SUFFIXE\n");
                                             printf("le verrou couvre de %ld à %ld\n", lock->starting_offset, lock->starting_offset + lock->len);
                                             pthread_mutex_unlock(&(lfd.f->file_mutex));
+                                            printf("Liste acutelle des verrous : \n");
+                                             printAllVerrousOccup();
                                             return 0;
                                         }
                                         else{
@@ -881,6 +899,8 @@ int rl_fcntl(rl_descriptor lfd, int cmd, struct flock *lck) {
                                                     break;
                                                 }
                                             }
+                                            printf("Liste acutelle des verrous : \n");
+                                             printAllVerrousOccup();
                                             printf("Le verrou a été posé SUFFIXE\n");
                                         }
                                     }

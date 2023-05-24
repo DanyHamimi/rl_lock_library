@@ -10,7 +10,7 @@ int main() {
     rl_init_library();
 
     // Ouverture d'un fichier avec rl_open
-    rl_descriptor descriptor = rl_open("dqsd", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    rl_descriptor descriptor = rl_open("dany.txt", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if (descriptor.d == -1) {
         perror("Erreur lors de l'ouverture du fichier");
         return 1;

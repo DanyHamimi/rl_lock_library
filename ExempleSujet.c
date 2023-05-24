@@ -10,7 +10,7 @@ int main() {
     rl_init_library();
 
     // Ouverture d'un fichier avec rl_open
-    rl_descriptor descriptor = rl_open("azert", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    rl_descriptor descriptor = rl_open("exSujet.txt", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if (descriptor.d == -1) {
         perror("Erreur lors de l'ouverture du fichier");
         return 1;
@@ -29,7 +29,7 @@ int main() {
         rl_close(descriptor);
         return 1;
     }
-    rl_descriptor descriptor2 = rl_open("azert", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    rl_descriptor descriptor2 = rl_open("exSujet.txt", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if (descriptor2.d == -1) {
         perror("Erreur lors de l'ouverture du fichier");
         return 1;

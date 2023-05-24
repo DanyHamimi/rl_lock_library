@@ -34,7 +34,7 @@ typedef struct {
 typedef struct {
     int first;
     rl_lock lock_table[NB_LOCKS];
-    pthread_mutex_t file_mutex; 
+    pthread_mutex_t file_mutex;
     char pathname[PATH_MAX]; // On ajoute ce champs pour le 6.7 et pouvoir supprimer le shm quand tous les descripteurs associés à celui ci sont fermés
     int nbtimes_opened;
 } rl_open_file;
@@ -65,5 +65,7 @@ rl_descriptor rl_dup2(rl_descriptor lfd, int newd);
 pid_t rl_fork();
 
 int rl_init_library();
+
+int printAllVerrousOccup();
 
 #endif
