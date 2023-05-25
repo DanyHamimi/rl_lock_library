@@ -1,5 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -g -pthread -std=gnu99 -w
+CFLAGS = -Wall -g -pthread -std=gnu99
+LIBS = -lrt
 
 LIB_SRC = rl_lock_library.c
 LIB_OBJ = $(LIB_SRC:.c=.o)
